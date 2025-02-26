@@ -19,23 +19,47 @@ def clean_text(text):
     return text.strip()
 
 
-def create_vector_database(csv_path, db_directory="./vector_db", batch_size=2000):
+def create_vector_database(
+    csv_path, db_directory="./vector_db", batch_size=2000, column_configs=None
+):
     """
-    Create a vector database from the food dataset with both detailed and simple descriptions
+    Create a vector database from the food dataset with configurable columns
 
     Args:
         csv_path: Path to the CSV file containing food data
         db_directory: Directory to store the vector database
         batch_size: Number of items to process in each batch
+        column_configs: List of dictionaries with the following keys:
+            - source_column: Column name to vectorize
+            - collection_name: Name for the collection
+            - cleaned_column: Name for the cleaned column (optional)
     """
     # Read the CSV file
     print(f"Reading data from {csv_path}...")
     df = pd.read_csv(csv_path)
 
+    # Use default configuration if none provided
+    if column_configs is None:
+        column_configs = [
+            {
+                "source_column": "ENFOODNAME",
+                "collection_name": "detailed",
+                "cleaned_column": "cleaned_detailed",
+            },
+            {
+                "source_column": "ENFOODNAME_SIMPLE",
+                "collection_name": "simple",
+                "cleaned_column": "cleaned_simple",
+            },
+        ]
+
     # Clean the food descriptions
     print("Processing food descriptions...")
-    df["cleaned_detailed"] = df["ENFOODNAME"].apply(clean_text)
-    df["cleaned_simple"] = df["ENFOODNAME_SIMPLE"].apply(clean_text)
+    for config in column_configs:
+        source_col = config["source_column"]
+        cleaned_col = config.get("cleaned_column", f"cleaned_{source_col.lower()}")
+        df[cleaned_col] = df[source_col].apply(clean_text)
+        config["cleaned_column"] = cleaned_col  # Store the cleaned column name
 
     # Initialize OpenAI embedding function
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -46,25 +70,22 @@ def create_vector_database(csv_path, db_directory="./vector_db", batch_size=2000
     print(f"Initializing ChromaDB at {db_directory}...")
     chroma_client = chromadb.PersistentClient(path=db_directory)
 
-    # Create or get collections for both detailed and simple descriptions
-    detailed_collection = chroma_client.get_or_create_collection(
-        name="detailed", embedding_function=openai_ef
-    )
+    # Create collections for each configuration
+    collections = {}
+    for config in column_configs:
+        collection_name = config["collection_name"]
+        collection = chroma_client.get_or_create_collection(
+            name=collection_name, embedding_function=openai_ef
+        )
+        collections[collection_name] = collection
 
-    simple_collection = chroma_client.get_or_create_collection(
-        name="simple", embedding_function=openai_ef
-    )
-
-    # Prepare data for insertion
-    detailed_documents = df["cleaned_detailed"].tolist()
-    simple_documents = df["cleaned_simple"].tolist()
-
+    # Prepare metadata
     metadatas = df.apply(
         lambda row: {
-            "facets": row["FACETS"],
-            "baseterm_name": row["BASETERM_NAME"],
-            "detailed_description": row["ENFOODNAME"],
-            "simple_description": row["ENFOODNAME_SIMPLE"],
+            "facets": row.get("FACETS", ""),
+            "baseterm_name": row.get("BASETERM_NAME", ""),
+            "detailed_description": row.get("ENFOODNAME", ""),
+            "simple_description": row.get("ENFOODNAME_SIMPLE", ""),
             "scientific_name": row.get("SCIENTIFIC_NAME", ""),
             "common_name": row.get("COMMON_NAME", ""),
         },
@@ -73,47 +94,34 @@ def create_vector_database(csv_path, db_directory="./vector_db", batch_size=2000
 
     ids = [f"food_{i}" for i in range(len(df))]
 
-    # Add data to the collections in batches
-    print(
-        f"Adding {len(detailed_documents)} food items to the detailed vector database in batches of {batch_size}..."
-    )
-
-    # Process in batches to avoid rate limits
-    for i in range(0, len(detailed_documents), batch_size):
-        end_idx = min(i + batch_size, len(detailed_documents))
-        batch_docs = detailed_documents[i:end_idx]
-        batch_meta = metadatas[i:end_idx]
-        batch_ids = ids[i:end_idx]
+    # Add data to each collection in batches
+    for config in column_configs:
+        collection_name = config["collection_name"]
+        cleaned_col = config["cleaned_column"]
+        documents = df[cleaned_col].tolist()
+        collection = collections[collection_name]
 
         print(
-            f"Processing batch {i//batch_size + 1}/{(len(detailed_documents) + batch_size - 1)//batch_size}: items {i} to {end_idx-1}"
-        )
-        detailed_collection.add(
-            documents=batch_docs, metadatas=batch_meta, ids=batch_ids
+            f"Adding {len(documents)} food items to the {collection_name} vector database in batches of {batch_size}..."
         )
 
-        # Optional: add a small delay between batches to avoid rate limits
-        time.sleep(2)
+        # Process in batches to avoid rate limits
+        for i in range(0, len(documents), batch_size):
+            end_idx = min(i + batch_size, len(documents))
+            batch_docs = documents[i:end_idx]
+            batch_meta = metadatas[i:end_idx]
+            batch_ids = ids[i:end_idx]
 
-    print(
-        f"Adding {len(simple_documents)} food items to the simple vector database in batches of {batch_size}..."
-    )
-    for i in range(0, len(simple_documents), batch_size):
-        end_idx = min(i + batch_size, len(simple_documents))
-        batch_docs = simple_documents[i:end_idx]
-        batch_meta = metadatas[i:end_idx]
-        batch_ids = ids[i:end_idx]
+            print(
+                f"Processing batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size}: items {i} to {end_idx-1}"
+            )
+            collection.add(documents=batch_docs, metadatas=batch_meta, ids=batch_ids)
 
-        print(
-            f"Processing batch {i//batch_size + 1}/{(len(simple_documents) + batch_size - 1)//batch_size}: items {i} to {end_idx-1}"
-        )
-        simple_collection.add(documents=batch_docs, metadatas=batch_meta, ids=batch_ids)
-
-        # Optional: add a small delay between batches to avoid rate limits
-        time.sleep(0.5)
+            # Add a small delay between batches to avoid rate limits
+            time.sleep(1)
 
     print(f"Vector databases created successfully at {db_directory}")
-    return {"detailed": detailed_collection, "simple": simple_collection}
+    return collections
 
 
 def query_vector_database(query_text, collection, n_results=3):
@@ -199,10 +207,17 @@ if __name__ == "__main__":
     # Path to your CSV file
     csv_path = "data/food2ex_curated_full.csv"  # Updated to use the curated dataset
 
-    # Create the vector databases
-    collections = create_vector_database(csv_path)
+    # Define column configurations
+    column_configs = [
+        # {"source_column": "ENFOODNAME", "collection_name": "detailed"},
+        # {"source_column": "ENFOODNAME_SIMPLE", "collection_name": "simple"},
+        {"source_column": "BASETERM_NAME", "collection_name": "baseterm"},
+    ]
 
-    # Test a query on both collections
+    # Create the vector databases
+    collections = create_vector_database(csv_path, column_configs=column_configs)
+
+    # Test a query on all collections
     test_query = "confectioners' sugar for baking"
 
     for collection_type, collection in collections.items():

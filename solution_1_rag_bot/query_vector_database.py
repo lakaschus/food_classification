@@ -24,7 +24,7 @@ def load_vector_database(db_directory="./vector_db", collection_type="detailed")
     chroma_client = chromadb.PersistentClient(path=db_directory)
 
     # Get the existing collection based on collection_type
-    collection_name = f"food_{collection_type}"
+    collection_name = f"{collection_type}"
     collection = chroma_client.get_collection(
         name=collection_name, embedding_function=openai_ef
     )
@@ -149,6 +149,7 @@ def load_all_collections(db_directory="./vector_db"):
     collections = {
         "detailed": load_vector_database(db_directory, "detailed"),
         "simple": load_vector_database(db_directory, "simple"),
+        "baseterm": load_vector_database(db_directory, "baseterm"),
     }
     return collections
 
