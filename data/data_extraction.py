@@ -85,7 +85,7 @@ def extract_data_from_excel(excel_file_path, sheet_name="term", sample_size=1000
 
         # Create a separate dataframe for base terms where termCode equals allFacets
         base_terms_df = df[df["termCode"] == df["allFacets"]].copy()
-        base_terms_df = base_terms_df[["termCode", "termExtendedName"]]
+        base_terms_df = base_terms_df[["termCode", "termExtendedName", "termScopeNote"]]
 
         # Save base terms to CSV
         base_terms_output_file = "data/base_terms.csv"

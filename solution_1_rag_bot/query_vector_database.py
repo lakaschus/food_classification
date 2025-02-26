@@ -3,12 +3,13 @@ import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
 
-def load_vector_database(db_directory="./vector_db"):
+def load_vector_database(db_directory="./vector_db", collection_type="detailed"):
     """
     Load an existing vector database
 
     Args:
         db_directory: Directory where the vector database is stored
+        collection_type: Type of collection to load ("detailed" or "simple")
 
     Returns:
         ChromaDB collection for querying
@@ -22,12 +23,15 @@ def load_vector_database(db_directory="./vector_db"):
     print(f"Connecting to ChromaDB at {db_directory}...")
     chroma_client = chromadb.PersistentClient(path=db_directory)
 
-    # Get the existing collection
+    # Get the existing collection based on collection_type
+    collection_name = f"food_{collection_type}"
     collection = chroma_client.get_collection(
-        name="food_database", embedding_function=openai_ef
+        name=collection_name, embedding_function=openai_ef
     )
 
-    print(f"Successfully connected to vector database with {collection.count()} items")
+    print(
+        f"Successfully connected to {collection_name} with {collection.count()} items"
+    )
     return collection
 
 
@@ -70,17 +74,18 @@ def query_vector_database(query_text, collection, n_results=3):
     return results
 
 
-def format_results(results):
+def format_results(results, collection_type):
     """
     Format the query results for display
 
     Args:
         results: Results from query_vector_database
+        collection_type: Type of collection queried ("detailed" or "simple")
 
     Returns:
         Formatted string of results
     """
-    output = "\nSearch Results:\n"
+    output = f"\nSearch Results from {collection_type} collection:\n"
 
     if not results["documents"][0]:
         return "No matching results found."
@@ -100,7 +105,13 @@ def format_results(results):
             output += f"Result {i+1}:\n"
             output += f"Base Term: {metadata['baseterm_name']}\n"
             output += f"Facets: {metadata['facets']}\n"
-            output += f"Description: {metadata['original_description']}\n"
+
+            # Display the appropriate description based on collection type
+            if collection_type == "detailed":
+                output += f"Detailed Description: {metadata['detailed_description']}\n"
+            else:
+                output += f"Simple Description: {metadata['simple_description']}\n"
+
             output += f"Similarity Score: {cosine_similarity:.4f}\n"
             output += "-" * 50 + "\n"
     else:
@@ -111,19 +122,49 @@ def format_results(results):
             output += f"Result {i+1}:\n"
             output += f"Base Term: {metadata['baseterm_name']}\n"
             output += f"Facets: {metadata['facets']}\n"
-            output += f"Description: {metadata['original_description']}\n"
+
+            # Display the appropriate description based on collection type
+            if collection_type == "detailed":
+                output += f"Detailed Description: {metadata['detailed_description']}\n"
+                output += f"Simple Description: {metadata['simple_description']}\n"
+            else:
+                output += f"Simple Description: {metadata['simple_description']}\n"
+                output += f"Detailed Description: {metadata['detailed_description']}\n"
+
             output += "-" * 50 + "\n"
 
     return output
 
 
+def load_all_collections(db_directory="./vector_db"):
+    """
+    Load both detailed and simple collections
+
+    Args:
+        db_directory: Directory where the vector database is stored
+
+    Returns:
+        Dictionary with both collections
+    """
+    collections = {
+        "detailed": load_vector_database(db_directory, "detailed"),
+        "simple": load_vector_database(db_directory, "simple"),
+    }
+    return collections
+
+
 if __name__ == "__main__":
-    # Load the existing vector database
-    collection = load_vector_database()
+    # Load both vector databases
+    collections = load_all_collections()
 
     # Interactive query loop
     print("\nFood Database Query Tool")
     print("Type 'exit' to quit")
+    print("Type 'switch' to toggle between detailed and simple collections")
+
+    # Default to detailed collection
+    current_collection_type = "detailed"
+    print(f"Currently using the {current_collection_type} collection")
 
     while True:
         query = input("\nEnter food description to search: ")
@@ -131,11 +172,21 @@ if __name__ == "__main__":
         if query.lower() in ["exit", "quit", "q"]:
             break
 
+        if query.lower() == "switch":
+            # Toggle between detailed and simple
+            current_collection_type = (
+                "simple" if current_collection_type == "detailed" else "detailed"
+            )
+            print(f"Switched to {current_collection_type} collection")
+            continue
+
         if not query.strip():
             continue
 
-        # Query the database
-        results = query_vector_database(query, collection, n_results=10)
+        # Query the current database
+        results = query_vector_database(
+            query, collections[current_collection_type], n_results=25
+        )
 
         # Display results
-        print(format_results(results))
+        print(format_results(results, current_collection_type))
