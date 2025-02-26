@@ -15,3 +15,5 @@ vector_db/*
 .bin
 
 .sqlite3
+vector_db/chroma.sqlite3
+vector_db/chroma.sqlite3

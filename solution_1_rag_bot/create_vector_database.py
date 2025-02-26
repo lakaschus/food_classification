@@ -48,11 +48,11 @@ def create_vector_database(csv_path, db_directory="./vector_db", batch_size=2000
 
     # Create or get collections for both detailed and simple descriptions
     detailed_collection = chroma_client.get_or_create_collection(
-        name="food_detailed", embedding_function=openai_ef
+        name="detailed", embedding_function=openai_ef
     )
 
     simple_collection = chroma_client.get_or_create_collection(
-        name="food_simple", embedding_function=openai_ef
+        name="simple", embedding_function=openai_ef
     )
 
     # Prepare data for insertion
@@ -93,7 +93,7 @@ def create_vector_database(csv_path, db_directory="./vector_db", batch_size=2000
         )
 
         # Optional: add a small delay between batches to avoid rate limits
-        time.sleep(0.5)
+        time.sleep(2)
 
     print(
         f"Adding {len(simple_documents)} food items to the simple vector database in batches of {batch_size}..."
