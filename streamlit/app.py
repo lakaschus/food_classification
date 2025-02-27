@@ -95,17 +95,20 @@ if search_mode == "Standard":
         ["detailed", "simple", "baseterm"],
         help="Detailed mode searches comprehensive food descriptions. Simple mode uses more basic descriptions.",
     )
+
+    # Only show the slider in standard mode
+    num_results = st.sidebar.slider(
+        "Number of results to show:",
+        min_value=1,
+        max_value=10,
+        value=3,
+        help="How many matching food items to display",
+    )
 else:
     # No need to select a collection in advanced mode as we use all collections
-    st.sidebar.info("Advanced mode automatically searches across all collections.")
-
-num_results = st.sidebar.slider(
-    "Number of results to show:",
-    min_value=1,
-    max_value=500,
-    value=3,
-    help="How many matching food items to display",
-)
+    st.sidebar.info(
+        "Advanced mode automatically searches across all collections and presents the top 5 matches selected by LLM Judge."
+    )
 
 # Main input area
 food_description = st.text_input(
@@ -280,7 +283,7 @@ if search_button and food_description:
                 advanced_results = advanced_multi_collection_search(
                     food_description,
                     st.session_state.collections,
-                    n_results=10,  # Get top 10 from each collection
+                    n_results=10,  # Fixed at 10 results per collection
                 )
 
                 # Display LLM-ranked results if available
@@ -303,9 +306,7 @@ if search_button and food_description:
                         similarity = full_info.get("similarity", 0)
 
                         # Create an expander for each result - using same format as standard search
-                        with st.expander(
-                            f"Match #{rank}: {baseterm_name} ({similarity:.2f} similarity)"
-                        ):
+                        with st.expander(f"Match #{rank}: {baseterm_name}"):
                             # Add the reasoning - this is the only addition to the standard format
                             st.markdown(f"**Why this match?** {reasoning}")
                             st.markdown("---")  # Add separator after reasoning
@@ -440,15 +441,6 @@ if search_button and food_description:
                                 st.markdown(
                                     f"**Collection:** {full_info.get('collection', '')}"
                                 )
-
-                    # Add an option to see all candidates
-                    if st.checkbox("Show all retrieved candidates"):
-                        st.subheader("All Retrieved Candidates")
-                        # Display all candidates in a table format
-                        candidates_df = pd.DataFrame(
-                            advanced_results["merged_candidates"]
-                        )
-                        st.dataframe(candidates_df)
 
                 elif "error" in advanced_results:
                     st.error(f"Error in advanced search: {advanced_results['error']}")
