@@ -47,7 +47,7 @@ def load_facets_data():
 @st.cache_data
 def load_base_terms_data():
     try:
-        base_terms_df = pd.read_csv("data/base_terms.csv")
+        base_terms_df = pd.read_csv("data/facet_expressions.csv")
         return base_terms_df
     except Exception as e:
         st.error(f"Error loading base terms data: {str(e)}")
@@ -92,7 +92,7 @@ if search_mode == "Standard":
     # Original collection selection code
     collection_type = st.sidebar.radio(
         "Collection:",
-        ["detailed", "simple", "baseterm"],
+        ["simple", "baseterm"],
         help="Detailed mode searches comprehensive food descriptions. Simple mode uses more basic descriptions.",
     )
 
@@ -243,8 +243,8 @@ if search_button and food_description:
                                                     <summary>View details</summary>
                                                     <p><b>Facet:</b> {facet_name} ({facet_code})<br/>
                                                     <b>Facet Description:</b> {facet_scope}<br/>
-                                                    <b>Base Term:</b> {baseterm_code} - {baseterm_name}<br/>
-                                                    <b>Base Term Description:</b> {baseterm_scope}</p>
+                                                    <b>Facet Expression:</b> {baseterm_code} - {baseterm_name}<br/>
+                                                    <b>Facet Expression Description:</b> {baseterm_scope}</p>
                                                     </details>""",
                                                 unsafe_allow_html=True,
                                             )
@@ -262,7 +262,7 @@ if search_button and food_description:
                             # Show additional information
                             st.markdown("### Additional Information")
 
-                            st.markdown("**Base Term:**")
+                            st.markdown("**Facet Expression:**")
                             st.write(metadata["baseterm_name"])
 
                             st.markdown("**Similarity Score:**")
@@ -407,8 +407,8 @@ if search_button and food_description:
                                                         <summary>View details</summary>
                                                         <p><b>Facet:</b> {facet_name} ({facet_code})<br/>
                                                         <b>Facet Description:</b> {facet_scope}<br/>
-                                                        <b>Base Term:</b> {baseterm_code} - {baseterm_name}<br/>
-                                                        <b>Base Term Description:</b> {baseterm_scope}</p>
+                                                        <b>Facet Expression:</b> {baseterm_code} - {baseterm_name}<br/>
+                                                        <b>Facet Expression Description:</b> {baseterm_scope}</p>
                                                         </details>""",
                                                     unsafe_allow_html=True,
                                                 )

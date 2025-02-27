@@ -135,7 +135,7 @@ def construct_simple_food_description(facets_df, base_terms_df, food_row):
 
 def create_curated_dataset(sample_size=None):
     """
-    Create the curated dataset by combining information from base_terms.csv,
+    Create the curated dataset by combining information from facet_expressions.csv,
     facets.csv, and food2ex_dataset_extracted.csv.
 
     Args:
@@ -143,7 +143,7 @@ def create_curated_dataset(sample_size=None):
     """
     print("Loading data files...")
     # Load the necessary CSV files
-    base_terms_df = pd.read_csv("data/base_terms.csv")
+    base_terms_df = pd.read_csv("data/facet_expressions.csv")
     facets_df = pd.read_csv("data/facets.csv")
 
     # Determine input and output file names based on sample_size

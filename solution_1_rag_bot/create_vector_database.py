@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # Define column configurations
     column_configs = [
         # {"source_column": "ENFOODNAME", "collection_name": "detailed"},
-        # {"source_column": "ENFOODNAME_SIMPLE", "collection_name": "simple"},
+        {"source_column": "ENFOODNAME_SIMPLE", "collection_name": "simple"},
         {"source_column": "BASETERM_NAME", "collection_name": "baseterm"},
     ]
 

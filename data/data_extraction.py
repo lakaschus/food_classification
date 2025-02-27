@@ -83,15 +83,13 @@ def extract_data_from_excel(excel_file_path, sheet_name="term", sample_size=1000
         df = df[df["status"] == "APPROVED"]
         print(f"Filtered to {len(df)} rows where status is 'APPROVED'")
 
-        # Create a separate dataframe for base terms where termCode equals allFacets
-        base_terms_df = df[df["termCode"] == df["allFacets"]].copy()
-        base_terms_df = base_terms_df[["termCode", "termExtendedName", "termScopeNote"]]
+        base_terms_df = df[["termCode", "termExtendedName", "termScopeNote"]]
 
         # Save base terms to CSV
-        base_terms_output_file = "data/base_terms.csv"
+        base_terms_output_file = "data/facet_expressions.csv"
         base_terms_df.to_csv(base_terms_output_file, index=False)
         print(
-            f"Base terms dataset with {len(base_terms_df)} rows created at {base_terms_output_file}"
+            f"Facet expressions dataset with {len(base_terms_df)} rows created at {base_terms_output_file}"
         )
 
         # Extract only the required columns (excluding status which was only used for filtering)

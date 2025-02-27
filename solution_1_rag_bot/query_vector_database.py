@@ -149,7 +149,6 @@ def load_all_collections(db_directory="./vector_db"):
         Dictionary with both collections
     """
     collections = {
-        "detailed": load_vector_database(db_directory, "detailed"),
         "simple": load_vector_database(db_directory, "simple"),
         "baseterm": load_vector_database(db_directory, "baseterm"),
     }
@@ -161,6 +160,7 @@ def advanced_multi_collection_search(
 ):
     """
     Query multiple collections and use a language model to select the most relevant results.
+    Prevents duplicate entries from different collections.
 
     Args:
         query_text: User's food description query
@@ -173,6 +173,8 @@ def advanced_multi_collection_search(
     """
     all_results = {}
     merged_candidates = []
+    # Track unique items by baseterm_name and facets to avoid duplicates
+    unique_items = set()
 
     # Query each collection
     for collection_name, collection in collections.items():
@@ -188,14 +190,26 @@ def advanced_multi_collection_search(
                     results["distances"][0],
                 )
             ):
+                # Create a unique identifier for this food item
+                baseterm = metadata.get("baseterm_name", "")
+                facets = metadata.get("facets", "")
+                unique_id = f"{baseterm}|{facets}"
+
+                # Skip if we've already seen this item
+                if unique_id in unique_items:
+                    continue
+
+                # Add to our set of unique items
+                unique_items.add(unique_id)
+
                 # Calculate similarity score
                 cosine_similarity = 1 - (distance**2) / 2
 
                 # Create a candidate entry with all relevant information
                 candidate = {
                     "collection": collection_name,
-                    "baseterm_name": metadata.get("baseterm_name", ""),
-                    "facets": metadata.get("facets", ""),
+                    "baseterm_name": baseterm,
+                    "facets": facets,
                     "detailed_description": metadata.get("detailed_description", ""),
                     "simple_description": metadata.get("simple_description", ""),
                     "scientific_name": metadata.get("scientific_name", ""),
@@ -209,7 +223,7 @@ def advanced_multi_collection_search(
     if merged_candidates:
         client = OpenAI()
 
-        # Convert candidates to a readable format for the LLM
+        # Update the candidates text to reflect the new numbering
         candidates_text = ""
         for i, candidate in enumerate(merged_candidates):
             candidates_text += f"Candidate {i+1}:\n"
