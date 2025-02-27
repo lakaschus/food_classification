@@ -1,6 +1,8 @@
 import os
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+import json
+from openai import OpenAI
 
 
 def load_vector_database(db_directory="./vector_db", collection_type="detailed"):
@@ -152,6 +154,160 @@ def load_all_collections(db_directory="./vector_db"):
         "baseterm": load_vector_database(db_directory, "baseterm"),
     }
     return collections
+
+
+def advanced_multi_collection_search(
+    query_text, collections, n_results=10, model="gpt-4o"
+):
+    """
+    Query multiple collections and use a language model to select the most relevant results.
+
+    Args:
+        query_text: User's food description query
+        collections: Dictionary of ChromaDB collections (detailed, simple, baseterm)
+        n_results: Number of results to retrieve from each collection
+        model: OpenAI model to use for reranking
+
+    Returns:
+        Dictionary containing the original query, all retrieved results, and ranked results
+    """
+    all_results = {}
+    merged_candidates = []
+
+    # Query each collection
+    for collection_name, collection in collections.items():
+        results = query_vector_database(query_text, collection, n_results=n_results)
+        all_results[collection_name] = results
+
+        # Process results from this collection
+        if results["documents"] and results["documents"][0]:
+            for i, (document, metadata, distance) in enumerate(
+                zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0],
+                )
+            ):
+                # Calculate similarity score
+                cosine_similarity = 1 - (distance**2) / 2
+
+                # Create a candidate entry with all relevant information
+                candidate = {
+                    "collection": collection_name,
+                    "baseterm_name": metadata.get("baseterm_name", ""),
+                    "facets": metadata.get("facets", ""),
+                    "detailed_description": metadata.get("detailed_description", ""),
+                    "simple_description": metadata.get("simple_description", ""),
+                    "scientific_name": metadata.get("scientific_name", ""),
+                    "common_name": metadata.get("common_name", ""),
+                    "similarity": cosine_similarity,
+                    "original_rank": i + 1,
+                }
+                merged_candidates.append(candidate)
+
+    # If we have results, use the LLM to rank them
+    if merged_candidates:
+        client = OpenAI()
+
+        # Convert candidates to a readable format for the LLM
+        candidates_text = ""
+        for i, candidate in enumerate(merged_candidates):
+            candidates_text += f"Candidate {i+1}:\n"
+            candidates_text += f"- Base Term: {candidate['baseterm_name']}\n"
+            candidates_text += f"- Facets: {candidate['facets']}\n"
+            candidates_text += (
+                f"- Detailed Description: {candidate['detailed_description']}\n"
+            )
+            candidates_text += (
+                f"- Simple Description: {candidate['simple_description']}\n"
+            )
+
+            if candidate["scientific_name"]:
+                candidates_text += (
+                    f"- Scientific Name: {candidate['scientific_name']}\n"
+                )
+            if candidate["common_name"]:
+                candidates_text += f"- Common Name: {candidate['common_name']}\n"
+
+            candidates_text += f"- Vector Similarity: {candidate['similarity']:.4f}\n"
+            candidates_text += f"- Collection: {candidate['collection']}\n"
+            candidates_text += "-" * 50 + "\n"
+
+        # Create prompt for the LLM
+        prompt = f"""
+You are a food code classification expert. Given a user's food description query, rank the most likely food codes that match the user's description.
+
+USER QUERY: "{query_text}"
+
+Below are {len(merged_candidates)} potential food matches retrieved from a vector database. 
+Each candidate includes:
+- Base Term: The primary food category
+- Facets: The food code in FACETS format
+- Detailed/Simple Description: Different descriptions of the food
+- Scientific/Common Name: When available
+- Vector Similarity: A score indicating vector embedding similarity
+- Collection: Where this result came from (detailed, simple, or baseterm collection)
+
+{candidates_text}
+
+Select the top 5 most appropriate food codes that best match the user's query.
+For each selected food code, explain your reasoning for why it's a good match in 1-2 sentences.
+Return your results in this JSON format:
+{{
+  "selected_foods": [
+    {{
+      "rank": 1,
+      "candidate_id": 5, 
+      "baseterm_name": "Name from candidate",
+      "facets": "FACETS code from candidate",
+      "reasoning": "Your explanation"
+    }},
+    ...more selected foods...
+  ]
+}}
+"""
+
+        # Call the OpenAI API
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+
+            # Parse the response
+            result = json.loads(response.choices[0].message.content)
+
+            # Enhance the result with full candidate information
+            for selected in result.get("selected_foods", []):
+                candidate_id = selected.get("candidate_id")
+                if candidate_id is not None and 1 <= candidate_id <= len(
+                    merged_candidates
+                ):
+                    # Add the full candidate information to the selection (0-indexed)
+                    selected["full_info"] = merged_candidates[candidate_id - 1]
+
+            return {
+                "query": query_text,
+                "all_results": all_results,
+                "merged_candidates": merged_candidates,
+                "llm_ranked_results": result,
+            }
+        except Exception as e:
+            print(f"Error calling OpenAI API: {str(e)}")
+            return {
+                "query": query_text,
+                "all_results": all_results,
+                "merged_candidates": merged_candidates,
+                "error": str(e),
+            }
+
+    return {
+        "query": query_text,
+        "all_results": all_results,
+        "merged_candidates": merged_candidates,
+    }
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ sys.path.append(".")
 from solution_1_rag_bot.query_vector_database import (
     load_all_collections,
     query_vector_database,
+    advanced_multi_collection_search,
 )
 
 
@@ -81,11 +82,22 @@ if "collections" not in st.session_state:
 
 # Create sidebar for settings
 st.sidebar.header("Search Settings")
-collection_type = st.sidebar.radio(
+search_mode = st.sidebar.radio(
     "Search Mode:",
-    ["detailed", "simple", "baseterm"],
-    help="Detailed mode searches comprehensive food descriptions. Simple mode uses more basic descriptions.",
+    ["Standard", "Advanced (LLM Re-ranking)"],
+    help="Standard mode searches a single collection. Advanced mode searches all collections and uses an LLM to rank results.",
 )
+
+if search_mode == "Standard":
+    # Original collection selection code
+    collection_type = st.sidebar.radio(
+        "Collection:",
+        ["detailed", "simple", "baseterm"],
+        help="Detailed mode searches comprehensive food descriptions. Simple mode uses more basic descriptions.",
+    )
+else:
+    # No need to select a collection in advanced mode as we use all collections
+    st.sidebar.info("Advanced mode automatically searches across all collections.")
 
 num_results = st.sidebar.slider(
     "Number of results to show:",
@@ -108,158 +120,340 @@ search_button = st.button("Search")
 # Process search when button is clicked
 if search_button and food_description:
     with st.spinner("Searching..."):
-        # Query the vector database
-        results = query_vector_database(
-            food_description,
-            st.session_state.collections[collection_type],
-            n_results=num_results,
-        )
+        if search_mode == "Standard":
+            # Original code for standard search
+            results = query_vector_database(
+                food_description,
+                st.session_state.collections[collection_type],
+                n_results=num_results,
+            )
 
-        # Display results
-        if results["documents"] and results["documents"][0]:
-            st.subheader("Search Results")
+            # Original code for displaying results
+            if results["documents"] and results["documents"][0]:
+                st.subheader("Search Results")
 
-            # Create columns for better layout
-            for i, (document, metadata, distance) in enumerate(
-                zip(
-                    results["documents"][0],
-                    results["metadatas"][0],
-                    results["distances"][0],
-                )
-            ):
-                # Calculate similarity score
-                cosine_similarity = 1 - (distance**2) / 2
-
-                # Create an expander for each result
-                with st.expander(
-                    f"Result {i+1}: {metadata['baseterm_name']} ({cosine_similarity:.2f} similarity)"
+                # Create columns for better layout
+                for i, (document, metadata, distance) in enumerate(
+                    zip(
+                        results["documents"][0],
+                        results["metadatas"][0],
+                        results["distances"][0],
+                    )
                 ):
-                    # Use a 3-column layout: Components | Description | Additional Info
-                    col1, col2 = st.columns([2, 2])
+                    # Calculate similarity score
+                    cosine_similarity = 1 - (distance**2) / 2
 
-                    with col1:
-                        st.markdown("### Food Code Components")
-                        st.markdown("*Click on each component for details*")
+                    # Create an expander for each result
+                    with st.expander(
+                        f"Result {i+1}: {metadata['baseterm_name']} ({cosine_similarity:.2f} similarity)"
+                    ):
+                        # Use a 3-column layout: Components | Description | Additional Info
+                        col1, col2 = st.columns([2, 2])
 
-                        # Parse and display FACETS components in a more visually appealing way
-                        if facets_df is not None and "facets" in metadata:
-                            # Parse the FACETS code
-                            unique_id, facet_baseterm_pairs = parse_facets(
-                                metadata["facets"]
-                            )
+                        with col1:
+                            st.markdown("### Food Code Components")
+                            st.markdown("*Click on each component for details*")
 
-                            if facet_baseterm_pairs:
-                                # Display the raw code first with color coding
-                                st.markdown("**Raw Food Code:**")
-
-                                # Format the raw code with colors
-                                formatted_code = f"{unique_id}#"
-
-                                # Add each facet-baseterm pair with proper coloring
-                                for i, (facet_code, baseterm_code) in enumerate(
-                                    facet_baseterm_pairs
-                                ):
-                                    if i > 0:
-                                        formatted_code += "$"
-                                    formatted_code += f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span>"
-
-                                # Display the formatted code with word-wrap and width constraints
-                                st.markdown(
-                                    f"<div style='background-color:#f0f2f6; padding:8px; border-radius:4px; font-family:monospace; word-wrap:break-word; max-width:100%; overflow-wrap:break-word;'>{formatted_code}</div>",
-                                    unsafe_allow_html=True,
+                            # Parse and display FACETS components in a more visually appealing way
+                            if facets_df is not None and "facets" in metadata:
+                                # Parse the FACETS code
+                                unique_id, facet_baseterm_pairs = parse_facets(
+                                    metadata["facets"]
                                 )
 
-                                # Display each component with HTML for visual distinction
-                                st.markdown("**Code Breakdown:**")
+                                if facet_baseterm_pairs:
+                                    # Display the raw code first with color coding
+                                    st.markdown("**Raw Food Code:**")
 
-                                for idx, (facet_code, baseterm_code) in enumerate(
-                                    facet_baseterm_pairs
-                                ):
-                                    # Look up facet information
-                                    facet_info = facets_df[
-                                        facets_df["code"] == facet_code
-                                    ]
+                                    # Format the raw code with colors
+                                    formatted_code = f"{unique_id}#"
 
-                                    # Look up base term information
-                                    baseterm_info = None
-                                    baseterm_name = ""
-                                    baseterm_scope = ""
+                                    # Add each facet-baseterm pair with proper coloring
+                                    for i, (facet_code, baseterm_code) in enumerate(
+                                        facet_baseterm_pairs
+                                    ):
+                                        if i > 0:
+                                            formatted_code += "$"
+                                        formatted_code += f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span>"
 
-                                    if base_terms_df is not None:
-                                        baseterm_info = base_terms_df[
-                                            base_terms_df["termCode"] == baseterm_code
+                                    # Display the formatted code with word-wrap and width constraints
+                                    st.markdown(
+                                        f"<div style='background-color:#f0f2f6; padding:8px; border-radius:4px; font-family:monospace; word-wrap:break-word; max-width:100%; overflow-wrap:break-word;'>{formatted_code}</div>",
+                                        unsafe_allow_html=True,
+                                    )
+
+                                    # Display each component with HTML for visual distinction
+                                    st.markdown("**Code Breakdown:**")
+
+                                    for idx, (facet_code, baseterm_code) in enumerate(
+                                        facet_baseterm_pairs
+                                    ):
+                                        # Look up facet information
+                                        facet_info = facets_df[
+                                            facets_df["code"] == facet_code
                                         ]
-                                        if not baseterm_info.empty:
-                                            baseterm_name = baseterm_info.iloc[0][
-                                                "termExtendedName"
+
+                                        # Look up base term information
+                                        baseterm_info = None
+                                        baseterm_name = ""
+                                        baseterm_scope = ""
+
+                                        if base_terms_df is not None:
+                                            baseterm_info = base_terms_df[
+                                                base_terms_df["termCode"]
+                                                == baseterm_code
                                             ]
-                                            baseterm_scope = (
-                                                baseterm_info.iloc[0]["termScopeNote"]
-                                                if "termScopeNote"
-                                                in baseterm_info.columns
+                                            if not baseterm_info.empty:
+                                                baseterm_name = baseterm_info.iloc[0][
+                                                    "termExtendedName"
+                                                ]
+                                                baseterm_scope = (
+                                                    baseterm_info.iloc[0][
+                                                        "termScopeNote"
+                                                    ]
+                                                    if "termScopeNote"
+                                                    in baseterm_info.columns
+                                                    else ""
+                                                )
+
+                                        if not facet_info.empty:
+                                            facet_name = facet_info.iloc[0]["name"]
+                                            facet_label = facet_info.iloc[0]["label"]
+                                            facet_scope = (
+                                                facet_info.iloc[0]["scopeNote"]
+                                                if "scopeNote" in facet_info.columns
                                                 else ""
                                             )
 
-                                    if not facet_info.empty:
-                                        facet_name = facet_info.iloc[0]["name"]
-                                        facet_label = facet_info.iloc[0]["label"]
-                                        facet_scope = (
-                                            facet_info.iloc[0]["scopeNote"]
-                                            if "scopeNote" in facet_info.columns
-                                            else ""
-                                        )
+                                            # Create a collapsible section for each component
+                                            st.markdown(f"**Component {idx+1}:**")
 
-                                        # Create a collapsible section for each component
-                                        st.markdown(f"**Component {idx+1}:**")
+                                            # Use different colors for facet and baseterm, and include baseterm name
+                                            st.markdown(
+                                                f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span> - {facet_label}: {baseterm_name}",
+                                                unsafe_allow_html=True,
+                                            )
 
-                                        # Use different colors for facet and baseterm, and include baseterm name
-                                        st.markdown(
-                                            f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span> - {facet_label}: {baseterm_name}",
-                                            unsafe_allow_html=True,
-                                        )
+                                            # Use HTML details/summary for collapsible content with base term info
+                                            st.markdown(
+                                                f"""<details>
+                                                    <summary>View details</summary>
+                                                    <p><b>Facet:</b> {facet_name} ({facet_code})<br/>
+                                                    <b>Facet Description:</b> {facet_scope}<br/>
+                                                    <b>Base Term:</b> {baseterm_code} - {baseterm_name}<br/>
+                                                    <b>Base Term Description:</b> {baseterm_scope}</p>
+                                                    </details>""",
+                                                unsafe_allow_html=True,
+                                            )
+                                            st.markdown("---")
+                                else:
+                                    # Fallback to regular code display if parsing failed
+                                    st.code(metadata["facets"], language=None)
 
-                                        # Use HTML details/summary for collapsible content with base term info
-                                        st.markdown(
-                                            f"""<details>
-                                                <summary>View details</summary>
-                                                <p><b>Facet:</b> {facet_name} ({facet_code})<br/>
-                                                <b>Facet Description:</b> {facet_scope}<br/>
-                                                <b>Base Term:</b> {baseterm_code} - {baseterm_name}<br/>
-                                                <b>Base Term Description:</b> {baseterm_scope}</p>
-                                                </details>""",
-                                            unsafe_allow_html=True,
-                                        )
-                                        st.markdown("---")
-                            else:
-                                # Fallback to regular code display if parsing failed
-                                st.code(metadata["facets"], language=None)
+                        with col2:
+                            # Show the simple description first as requested
+                            st.markdown("### Food Description")
+                            st.markdown("**Simple Description:**")
+                            st.write(metadata["simple_description"])
 
-                    with col2:
-                        # Show the simple description first as requested
-                        st.markdown("### Food Description")
-                        st.markdown("**Simple Description:**")
-                        st.write(metadata["simple_description"])
+                            # Show additional information
+                            st.markdown("### Additional Information")
 
-                        # Show additional information
-                        st.markdown("### Additional Information")
+                            st.markdown("**Base Term:**")
+                            st.write(metadata["baseterm_name"])
 
-                        st.markdown("**Base Term:**")
-                        st.write(metadata["baseterm_name"])
+                            st.markdown("**Similarity Score:**")
+                            st.write(f"{cosine_similarity:.4f}")
 
-                        st.markdown("**Similarity Score:**")
-                        st.write(f"{cosine_similarity:.4f}")
+                            if metadata.get("scientific_name"):
+                                st.markdown("**Scientific Name:**")
+                                st.write(metadata["scientific_name"])
 
-                        if metadata.get("scientific_name"):
-                            st.markdown("**Scientific Name:**")
-                            st.write(metadata["scientific_name"])
-
-                        if metadata.get("common_name"):
-                            st.markdown("**Common Name:**")
-                            st.write(metadata["common_name"])
+                            if metadata.get("common_name"):
+                                st.markdown("**Common Name:**")
+                                st.write(metadata["common_name"])
         else:
-            st.warning(
-                "No matching results found. Try a different description or search mode."
-            )
+            # Advanced search using all collections
+            with st.spinner(
+                "Searching across all collections and analyzing results with LLM..."
+            ):
+                advanced_results = advanced_multi_collection_search(
+                    food_description,
+                    st.session_state.collections,
+                    n_results=10,  # Get top 10 from each collection
+                )
+
+                # Display LLM-ranked results if available
+                if (
+                    "llm_ranked_results" in advanced_results
+                    and "selected_foods" in advanced_results["llm_ranked_results"]
+                ):
+                    st.subheader("Top Matches Selected by AI")
+
+                    for i, selected in enumerate(
+                        advanced_results["llm_ranked_results"]["selected_foods"]
+                    ):
+                        rank = selected.get("rank", i + 1)
+                        baseterm_name = selected.get("baseterm_name", "")
+                        facets = selected.get("facets", "")
+                        reasoning = selected.get("reasoning", "")
+                        full_info = selected.get("full_info", {})
+
+                        # Get similarity score from full_info
+                        similarity = full_info.get("similarity", 0)
+
+                        # Create an expander for each result - using same format as standard search
+                        with st.expander(
+                            f"Match #{rank}: {baseterm_name} ({similarity:.2f} similarity)"
+                        ):
+                            # Add the reasoning - this is the only addition to the standard format
+                            st.markdown(f"**Why this match?** {reasoning}")
+                            st.markdown("---")  # Add separator after reasoning
+
+                            # Use a 2-column layout as in standard search
+                            col1, col2 = st.columns([2, 2])
+
+                            with col1:
+                                st.markdown("### Food Code Components")
+                                st.markdown("*Click on each component for details*")
+
+                                # Parse and display FACETS components in a more visually appealing way
+                                if facets_df is not None and facets:
+                                    # Parse the FACETS code
+                                    unique_id, facet_baseterm_pairs = parse_facets(
+                                        facets
+                                    )
+
+                                    if facet_baseterm_pairs:
+                                        # Display the raw code first with color coding
+                                        st.markdown("**Raw Food Code:**")
+
+                                        # Format the raw code with colors
+                                        formatted_code = f"{unique_id}#"
+
+                                        # Add each facet-baseterm pair with proper coloring
+                                        for j, (facet_code, baseterm_code) in enumerate(
+                                            facet_baseterm_pairs
+                                        ):
+                                            if j > 0:
+                                                formatted_code += "$"
+                                            formatted_code += f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span>"
+
+                                        # Display the formatted code with word-wrap and width constraints
+                                        st.markdown(
+                                            f"<div style='background-color:#f0f2f6; padding:8px; border-radius:4px; font-family:monospace; word-wrap:break-word; max-width:100%; overflow-wrap:break-word;'>{formatted_code}</div>",
+                                            unsafe_allow_html=True,
+                                        )
+
+                                        # Display each component with HTML for visual distinction
+                                        st.markdown("**Code Breakdown:**")
+
+                                        for idx, (
+                                            facet_code,
+                                            baseterm_code,
+                                        ) in enumerate(facet_baseterm_pairs):
+                                            # Look up facet information
+                                            facet_info = facets_df[
+                                                facets_df["code"] == facet_code
+                                            ]
+
+                                            # Look up base term information
+                                            baseterm_info = None
+                                            baseterm_name = ""
+                                            baseterm_scope = ""
+
+                                            if base_terms_df is not None:
+                                                baseterm_info = base_terms_df[
+                                                    base_terms_df["termCode"]
+                                                    == baseterm_code
+                                                ]
+                                                if not baseterm_info.empty:
+                                                    baseterm_name = baseterm_info.iloc[
+                                                        0
+                                                    ]["termExtendedName"]
+                                                    baseterm_scope = (
+                                                        baseterm_info.iloc[0][
+                                                            "termScopeNote"
+                                                        ]
+                                                        if "termScopeNote"
+                                                        in baseterm_info.columns
+                                                        else ""
+                                                    )
+
+                                            if not facet_info.empty:
+                                                facet_name = facet_info.iloc[0]["name"]
+                                                facet_label = facet_info.iloc[0][
+                                                    "label"
+                                                ]
+                                                facet_scope = (
+                                                    facet_info.iloc[0]["scopeNote"]
+                                                    if "scopeNote" in facet_info.columns
+                                                    else ""
+                                                )
+
+                                                # Create a collapsible section for each component
+                                                st.markdown(f"**Component {idx+1}:**")
+
+                                                # Use different colors for facet and baseterm, and include baseterm name
+                                                st.markdown(
+                                                    f"<span style='color:#1E88E5;font-weight:bold;'>{facet_code}</span>.<span style='color:#D81B60;font-weight:bold;'>{baseterm_code}</span> - {facet_label}: {baseterm_name}",
+                                                    unsafe_allow_html=True,
+                                                )
+
+                                                # Use HTML details/summary for collapsible content with base term info
+                                                st.markdown(
+                                                    f"""<details>
+                                                        <summary>View details</summary>
+                                                        <p><b>Facet:</b> {facet_name} ({facet_code})<br/>
+                                                        <b>Facet Description:</b> {facet_scope}<br/>
+                                                        <b>Base Term:</b> {baseterm_code} - {baseterm_name}<br/>
+                                                        <b>Base Term Description:</b> {baseterm_scope}</p>
+                                                        </details>""",
+                                                    unsafe_allow_html=True,
+                                                )
+                                                st.markdown("---")
+                                    else:
+                                        # Fallback to regular code display if parsing failed
+                                        st.code(facets, language=None)
+
+                            with col2:
+                                st.markdown("### Food Description")
+                                st.markdown(
+                                    f"**Detailed:** {full_info.get('detailed_description', '')}"
+                                )
+                                st.markdown(
+                                    f"**Simple:** {full_info.get('simple_description', '')}"
+                                )
+
+                                if full_info.get("scientific_name"):
+                                    st.markdown(
+                                        f"**Scientific Name:** {full_info.get('scientific_name', '')}"
+                                    )
+                                if full_info.get("common_name"):
+                                    st.markdown(
+                                        f"**Common Name:** {full_info.get('common_name', '')}"
+                                    )
+
+                                st.markdown(
+                                    f"**Original Vector Similarity:** {full_info.get('similarity', 0):.4f}"
+                                )
+                                st.markdown(
+                                    f"**Collection:** {full_info.get('collection', '')}"
+                                )
+
+                    # Add an option to see all candidates
+                    if st.checkbox("Show all retrieved candidates"):
+                        st.subheader("All Retrieved Candidates")
+                        # Display all candidates in a table format
+                        candidates_df = pd.DataFrame(
+                            advanced_results["merged_candidates"]
+                        )
+                        st.dataframe(candidates_df)
+
+                elif "error" in advanced_results:
+                    st.error(f"Error in advanced search: {advanced_results['error']}")
+                else:
+                    st.warning("No results found or LLM ranking failed.")
 
 # Add information about the database
 st.sidebar.markdown("---")
