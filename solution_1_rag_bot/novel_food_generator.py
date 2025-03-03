@@ -13,7 +13,7 @@ from solution_1_rag_bot.query_vector_database import (
 
 
 class NovelFoodCodeGenerator:
-    def __init__(self, openai_api_key=None, model="gpt-4o"):
+    def __init__(self, openai_api_key=None, model="gpt-4o-mini"):
         """
         Initialize the Novel Food Code Generator
 

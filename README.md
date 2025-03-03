@@ -83,6 +83,27 @@ The `query_vector_database.py` implements the retrieval and ranking functionalit
    - Uses LLM-based reranking to improve result relevance
    - Identifies the most likely FACETS codes for a given food description
 
+## Novel Food Code Generation
+
+The system also includes functionality to generate appropriate facet expressions for novel foods not present in the existing database (`novel_food_generator.py`):
+
+1. **Food Description Decomposition**
+   - Analyzes user-provided food descriptions using LLM
+   - Breaks down complex descriptions into distinct meaningful components
+   - Identifies key characteristics relevant to food classification
+
+2. **Component-Based Vector Search**
+   - Performs vector searches for each decomposed component
+   - Retrieves semantically similar base terms from the database
+   - Gathers relevant facet expressions from top matches
+
+3. **Contextual Facet Expression Generation**
+   - Combines retrieved facet information as context for LLM
+   - Generates appropriate facet expressions (e.g., "F01.A0EZN$F02.A0C5P")
+   - Provides explanations for selected facet components
+   
+This approach allows the system to handle novel or fusion foods by decomposing them into known components, finding relevant classifications, and then synthesizing appropriate facet expressions following the FoodEx2 classification system structure.
+
 ## Streamlit Web Application
 
 The `streamlit/app.py` provides a user-friendly interface for interacting with the system:
@@ -99,6 +120,11 @@ The `streamlit/app.py` provides a user-friendly interface for interacting with t
 3. **Interactive Exploration**
    - Allows users to explore the food classification system
    - Provides feedback mechanisms to improve future matches
+   
+4. **Novel Food Generation**
+   - Enables users to describe novel foods not in the existing database
+   - Generates appropriate facet expressions for these novel foods
+   - Provides detailed analysis of the decomposition and generation process
 
 ## Usage
 
@@ -112,6 +138,7 @@ The `streamlit/app.py` provides a user-friendly interface for interacting with t
 3. **Web Application**
    - Start the Streamlit app with `streamlit run streamlit/app.py`
    - Enter food descriptions to find matching standardized food codes
+   - Use the "Novel Food Code Generator" tab for generating facet expressions for new foods
 
 ## Technical Implementation Details
 
@@ -124,4 +151,4 @@ Note: OpenAI models have been used for quick development. But for a productive e
 
 ## Conclusion
 
-This system demonstrates how modern RAG techniques can be applied to the complex domain of food classification, offering a powerful tool for researchers, nutritionists, and data scientists working with food consumption data. By accurately mapping natural language food descriptions to standardized codes, the system enhances data quality and interoperability across food safety and nutrition studies. 
+This system demonstrates how modern RAG techniques can be applied to the complex domain of food classification, offering a powerful tool for researchers, nutritionists, and data scientists working with food consumption data. By accurately mapping natural language food descriptions to standardized codes and generating appropriate classifications for novel foods, the system enhances data quality and interoperability across food safety and nutrition studies. 

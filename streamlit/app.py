@@ -92,17 +92,12 @@ with tabs[0]:
     st.sidebar.header("Search Settings")
     search_mode = st.sidebar.radio(
         "Search Mode:",
-        ["Standard", "Advanced (LLM Re-ranking)"],
+        ["Standard RAG", "Advanced RAG (LLM Re-ranking)"],
         help="Standard mode searches a single collection. Advanced mode searches all collections and uses an LLM to rank results.",
     )
 
-    if search_mode == "Standard":
+    if search_mode == "Standard RAG":
         # Original collection selection code
-        collection_type = st.sidebar.radio(
-            "Collection:",
-            ["simple", "baseterm"],
-            help="Detailed mode searches comprehensive food descriptions. Simple mode uses more basic descriptions.",
-        )
 
         # Only show the slider in standard mode
         num_results = st.sidebar.slider(
@@ -131,11 +126,11 @@ with tabs[0]:
     # Process search when button is clicked
     if search_button and food_description:
         with st.spinner("Searching..."):
-            if search_mode == "Standard":
+            if search_mode == "Standard RAG":
                 # Original code for standard search
                 results = query_vector_database(
                     food_description,
-                    st.session_state.collections[collection_type],
+                    st.session_state.collections["baseterm"],
                     n_results=num_results,
                 )
 
@@ -487,14 +482,14 @@ with tabs[1]:
 
     # Model selection for code generation
     model_options = {
+        "GPT-4o mini": "gpt-4o-mini",
         "GPT-4o": "gpt-4o",
-        "GPT-3.5 Turbo": "gpt-3.5-turbo",
     }
     selected_model = st.selectbox(
         "Select AI model for facet expression generation:",
         list(model_options.keys()),
         index=0,
-        help="GPT-4o provides the most accurate results but may be slower. GPT-3.5 Turbo is faster but may be less accurate.",
+        help="GPT-4o provides the most accurate results but may be slower. GPT-4o mini is faster but may be less accurate.",
     )
     model = model_options[selected_model]
 

@@ -156,7 +156,7 @@ def load_all_collections(db_directory="./vector_db"):
 
 
 def advanced_multi_collection_search(
-    query_text, collections, n_results=10, model="gpt-4o"
+    query_text, collections, n_results=10, model="gpt-4o-mini"
 ):
     """
     Query multiple collections and use a language model to select the most relevant results.
