@@ -6,6 +6,48 @@ import streamlit as st
 import os
 import sys
 import pandas as pd
+import zipfile
+
+# Check if vector_db folder exists
+if not os.path.exists("vector_db"):
+    st.info("Vector database not found. Downloading...")
+
+    # Try to import gdown, install if not available
+    try:
+        import gdown
+    except ImportError:
+        import subprocess
+
+        st.warning("Installing required dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "gdown"])
+        import gdown
+
+    # Download zip file from Google Drive
+    zip_path = "vector_db.zip"
+    file_id = "1WynqlwWQPSknj3lHPp7GUnPlid-w-dg5"  # Extract ID from the URL
+
+    try:
+        output = gdown.download(id=file_id, output=zip_path, quiet=False)
+
+        if not output:
+            st.error(
+                "Failed to download the vector database. Please check your internet connection or try again later."
+            )
+            st.stop()
+
+        # Extract zip file
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(".")
+
+        # Remove the zip file after extraction
+        os.remove(zip_path)
+
+        st.success("Vector database downloaded and extracted successfully!")
+    except Exception as e:
+        st.error(f"Error downloading or extracting the database: {str(e)}")
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+        st.stop()
 
 # Add the solution_1_rag_bot directory to the path so we can import from it
 sys.path.append(".")
