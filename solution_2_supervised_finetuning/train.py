@@ -25,12 +25,12 @@ print(f"Using device: {device}")
 # Configuration
 MODEL_NAME = "distilbert-base-uncased"  # ~66M parameters
 MAX_LENGTH = 128
-BATCH_SIZE = 32
-LEARNING_RATE = 2e-5
-NUM_EPOCHS = 2
+BATCH_SIZE = 64
+LEARNING_RATE = 1e-4
+NUM_EPOCHS = 3
 WARMUP_STEPS = 500
 WEIGHT_DECAY = 0.01
-DATA_PATH = "./data/food2ex_curated_sample_100.csv"  # Update path if needed
+DATA_PATH = "./data/food2ex_curated_full.csv"  # Update path if needed
 OUTPUT_DIR = "./model_output"
 EVAL_STEPS = 500
 SAVE_STEPS = 500
@@ -355,7 +355,7 @@ def train():
     # Split data
     print("Splitting data into train and validation sets...")
     X_train, X_val, bt_train, bt_val, fc_train, fc_val = train_test_split(
-        X, baseterm_codes, facet_codes, test_size=0.2, random_state=42
+        X, baseterm_codes, facet_codes, test_size=0.01, random_state=42
     )
 
     # Load tokenizer
@@ -513,7 +513,7 @@ def train():
     model.load_state_dict(torch.load(os.path.join(OUTPUT_DIR, "best_model.pt")))
 
     # Evaluate on random examples
-    evaluate_random_examples(model, val_dataset, num_examples=5)
+    evaluate_random_examples(model, train_dataset, num_examples=5)
 
 
 # Inference function
