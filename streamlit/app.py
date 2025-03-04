@@ -314,7 +314,7 @@ with tabs[0]:
                                 # Show additional information
                                 st.markdown("### Additional Information")
 
-                                st.markdown("**Facet Expression:**")
+                                st.markdown("**Base Term:**")
                                 st.write(metadata["baseterm_name"])
 
                                 st.markdown("**Similarity Score:**")
