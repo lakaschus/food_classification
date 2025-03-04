@@ -17,3 +17,5 @@ vector_db/*
 .sqlite3
 vector_db/chroma.sqlite3
 vector_db/chroma.sqlite3
+
+model_output/
