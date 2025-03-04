@@ -19,8 +19,95 @@ def clean_text(text):
     return text.strip()
 
 
+def create_core_terms_collection(
+    chroma_client, openai_ef, facet_path="data/facet_expressions.csv"
+):
+    """
+    Create a vector collection for core terms with direct term-to-code mapping.
+
+    Args:
+        chroma_client: Initialized ChromaDB client
+        openai_ef: OpenAI embedding function
+        facet_path: Path to the facet expressions CSV file
+
+    Returns:
+        ChromaDB collection for core terms
+    """
+    print(f"Creating core terms collection from {facet_path}...")
+
+    # Check if the CSV file exists
+    if not os.path.exists(facet_path):
+        print(f"Error: Facet expressions file not found at {facet_path}")
+        return None
+
+    # Load the facet expressions CSV
+    try:
+        facet_df = pd.read_csv(facet_path)
+        print(f"Loaded {len(facet_df)} facet expressions")
+    except Exception as e:
+        print(f"Error loading facet expressions: {str(e)}")
+        return None
+
+    # Create or get the collection
+    collection = chroma_client.get_or_create_collection(
+        name="core_terms", embedding_function=openai_ef
+    )
+
+    # Prepare data for the collection
+    documents = []
+    metadatas = []
+    ids = []
+
+    # Process each row in the facet expressions CSV
+    for idx, row in facet_df.iterrows():
+        term_code = row.get("termCode", "")
+        term_name = row.get("termExtendedName", "")
+        term_note = row.get("termScopeNote", "")
+
+        if pd.isna(term_name) or pd.isna(term_code):
+            continue
+
+        # Clean the term name
+        clean_term = clean_text(term_name)
+
+        # Prepare metadata
+        metadata = {
+            "term": term_name,
+            "code": term_code,
+            "description": term_note if not pd.isna(term_note) else "",
+        }
+
+        documents.append(clean_term)
+        metadatas.append(metadata)
+        ids.append(f"term_{term_code}")
+
+    # Add data to collection in batches
+    batch_size = 2000
+    for i in range(0, len(documents), batch_size):
+        end_idx = min(i + batch_size, len(documents))
+        batch_docs = documents[i:end_idx]
+        batch_meta = metadatas[i:end_idx]
+        batch_ids = ids[i:end_idx]
+
+        print(
+            f"Processing core terms batch {i//batch_size + 1}/{(len(documents) + batch_size - 1)//batch_size}: items {i} to {end_idx-1}"
+        )
+        collection.add(documents=batch_docs, metadatas=batch_meta, ids=batch_ids)
+
+        # Add a small delay between batches to avoid rate limits
+        time.sleep(1)
+
+    print(f"Core terms collection created with {len(documents)} terms")
+    return collection
+
+
 def create_vector_database(
-    csv_path, db_directory="./vector_db", batch_size=2000, column_configs=None
+    csv_path,
+    db_directory="./vector_db",
+    batch_size=2000,
+    column_configs=None,
+    create_core_terms=True,
+    facet_path="data/facet_expressions.csv",
 ):
     """
     Create a vector database from the food dataset with configurable columns
@@ -33,25 +120,12 @@ def create_vector_database(
             - source_column: Column name to vectorize
             - collection_name: Name for the collection
             - cleaned_column: Name for the cleaned column (optional)
+        create_core_terms: Whether to create the core terms collection
+        facet_path: Path to the facet expressions CSV file
     """
     # Read the CSV file
     print(f"Reading data from {csv_path}...")
     df = pd.read_csv(csv_path)
-
-    # Use default configuration if none provided
-    if column_configs is None:
-        column_configs = [
-            {
-                "source_column": "ENFOODNAME",
-                "collection_name": "detailed",
-                "cleaned_column": "cleaned_detailed",
-            },
-            {
-                "source_column": "ENFOODNAME_SIMPLE",
-                "collection_name": "simple",
-                "cleaned_column": "cleaned_simple",
-            },
-        ]
 
     # Clean the food descriptions
     print("Processing food descriptions...")
@@ -120,6 +194,14 @@ def create_vector_database(
             # Add a small delay between batches to avoid rate limits
             time.sleep(1)
 
+    # Create the core terms collection if requested
+    if create_core_terms:
+        core_collection = create_core_terms_collection(
+            chroma_client, openai_ef, facet_path
+        )
+        if core_collection:
+            collections["core_terms"] = core_collection
+
     print(f"Vector databases created successfully at {db_directory}")
     return collections
 
@@ -183,10 +265,18 @@ def display_search_results(results, collection_type):
             cosine_similarity = 1 - (distance**2) / 2
 
             print(f"Result {i+1}:")
-            print(f"Base Term: {metadata['baseterm_name']}")
-            print(f"Facets: {metadata['facets']}")
-            print(f"Detailed Description: {metadata['detailed_description'][:100]}...")
-            print(f"Simple Description: {metadata['simple_description'][:100]}...")
+            if "baseterm_name" in metadata:
+                print(f"Base Term: {metadata['baseterm_name']}")
+                print(f"Facets: {metadata['facets']}")
+                print(
+                    f"Detailed Description: {metadata['detailed_description'][:100]}..."
+                )
+                print(f"Simple Description: {metadata['simple_description'][:100]}...")
+            else:
+                print(f"Term: {metadata.get('term', '')}")
+                print(f"Code: {metadata.get('code', '')}")
+                print(f"Description: {metadata.get('description', '')[:100]}...")
+
             print(f"Similarity Score: {cosine_similarity:.4f}")
             print(f"Raw Distance: {distance:.4f}")
             print("-" * 50)
@@ -196,26 +286,39 @@ def display_search_results(results, collection_type):
             zip(results["documents"][0], results["metadatas"][0])
         ):
             print(f"Result {i+1}:")
-            print(f"Base Term: {metadata['baseterm_name']}")
-            print(f"Facets: {metadata['facets']}")
-            print(f"Detailed Description: {metadata['detailed_description'][:100]}...")
-            print(f"Simple Description: {metadata['simple_description'][:100]}...")
+            if "baseterm_name" in metadata:
+                print(f"Base Term: {metadata['baseterm_name']}")
+                print(f"Facets: {metadata['facets']}")
+                print(
+                    f"Detailed Description: {metadata['detailed_description'][:100]}..."
+                )
+                print(f"Simple Description: {metadata['simple_description'][:100]}...")
+            else:
+                print(f"Term: {metadata.get('term', '')}")
+                print(f"Code: {metadata.get('code', '')}")
+                print(f"Description: {metadata.get('description', '')[:100]}...")
             print("-" * 50)
 
 
 if __name__ == "__main__":
     # Path to your CSV file
     csv_path = "data/food2ex_curated_full.csv"  # Updated to use the curated dataset
+    facet_path = "data/facet_expressions.csv"  # Path to facet expressions
 
     # Define column configurations
     column_configs = [
         # {"source_column": "ENFOODNAME", "collection_name": "detailed"},
-        {"source_column": "ENFOODNAME_SIMPLE", "collection_name": "simple"},
-        {"source_column": "BASETERM_NAME", "collection_name": "baseterm"},
+        # {"source_column": "ENFOODNAME_SIMPLE", "collection_name": "simple"},
+        # {"source_column": "BASETERM_NAME", "collection_name": "baseterm"},
     ]
 
     # Create the vector databases
-    collections = create_vector_database(csv_path, column_configs=column_configs)
+    collections = create_vector_database(
+        csv_path,
+        column_configs=column_configs,
+        create_core_terms=True,
+        facet_path=facet_path,
+    )
 
     # Test a query on all collections
     test_query = "confectioners' sugar for baking"
@@ -224,3 +327,14 @@ if __name__ == "__main__":
         print(f"\nTesting query on {collection_type} collection: '{test_query}'")
         results = query_vector_database(test_query, collection)
         display_search_results(results, collection_type)
+
+    # Test a direct food lookup query
+    test_direct_query = "Hummus"
+    if "core_terms" in collections:
+        print(
+            f"\nTesting direct lookup on core_terms collection: '{test_direct_query}'"
+        )
+        direct_results = query_vector_database(
+            test_direct_query, collections["core_terms"]
+        )
+        display_search_results(direct_results, "core_terms")
