@@ -176,14 +176,14 @@ class NovelFoodCodeGenerator:
 
     def generate_food_code(self, food_description, component_matches):
         """
-        Generate facet expressions for a novel food based on component matches
+        Generate a full FoodEx2 code including base term and facet expressions for a novel food
 
         Args:
             food_description: Original food description
             component_matches: Dictionary mapping components to matches from core_terms
 
         Returns:
-            Generated facet expressions and explanation
+            Generated FoodEx2 code and explanation
         """
         # Prepare facet descriptions as context - include ALL facets for proper categorization
         facet_context = self.facets_df[["code", "name", "scopeNote"]].to_string()
@@ -205,7 +205,7 @@ class NovelFoodCodeGenerator:
         print(f"Facet categories: {facet_categories_str}")
 
         prompt = f"""
-        You are an expert food classification and coding assistant. Your task is to generate facet expressions for a food item.
+        You are an expert food classification and coding assistant. Your task is to generate a complete FoodEx2 code for a food item.
         
         FOOD DESCRIPTION: "{food_description}"
         
@@ -217,25 +217,22 @@ class NovelFoodCodeGenerator:
         
         INSTRUCTIONS:
         1. Analyze the food description and component matches
-        2. Identify the MAIN food/ingredient in the description
-        3. If there's a high-similarity match (>0.85) for any component, use its code
-        4. For components with exact name matches, prioritize using their codes
-        5. For "hummus" specifically, use the code A03VN if found
-        6. IMPORTANT: All facet expressions MUST be in the format "FXX.XXXXX" where FXX is the facet category
-        7. Example: Use "F02.A03ZD" instead of just "A03ZD"
-        8. Choose appropriate facet categories from the FACET CATEGORIES list based on what each code represents:
-           - F01: Source
-           - F02: Part
-           - F04: Ingredient
-           - F07: Process
-           - etc.
-        9. Use $ as a separator between multiple facet expressions
-        10. Provide a brief explanation of your reasoning
+        2. First, identify the MAIN food/ingredient that should be the BASE TERM - this is MANDATORY
+        3. A base term code looks like: A0C75 (for salmon), A03BG, etc. (typically starts with 'A' and doesn't have a facet prefix)
+        4. Then, identify relevant facets to further describe the food
+        5. If there's a high-similarity match (>0.85) for any component, use its code
+        6. For components with exact name matches, prioritize using their codes
+        7. All facet expressions MUST be in the format "FXX.XXXXX" where FXX is the facet category
+        8. Choose appropriate facet categories from the FACET CATEGORIES list based on what each code represents
+        9. The COMPLETE FoodEx2 code format is: BASETERM#FACET1$FACET2$FACET3
+           (The base term, followed by # character, then facets separated by $ characters)
+        10. Example: "A03BG#F09.A0EXH$F10.A077L$F21.A07SE"
+        11. Provide a brief explanation of your reasoning, including why you selected that base term
         
         OUTPUT FORMAT:
         ```
-        FACET EXPRESSIONS: [generated facet expressions in format F02.A03ZD$F04.A03VN$F07.A07PH]
-        EXPLANATION: [brief explanation of the facet expressions and reasoning]
+        FOODEX2 CODE: [complete code in format BASETERM#FACET1$FACET2$FACET3]
+        EXPLANATION: [brief explanation of the base term and facet expressions with reasoning]
         ```
         """
 
@@ -250,19 +247,19 @@ class NovelFoodCodeGenerator:
             return result
 
         except Exception as e:
-            print(f"Error generating facet expressions: {str(e)}")
-            return f"Error generating facet expressions: {str(e)}"
+            print(f"Error generating FoodEx2 code: {str(e)}")
+            return f"Error generating FoodEx2 code: {str(e)}"
 
     def process_novel_food(self, food_description):
         """
-        Complete pipeline to process a novel food description and generate facet expressions
+        Complete pipeline to process a novel food description and generate a FoodEx2 code
         ONLY using the core_terms collection
 
         Args:
             food_description: User's novel food description
 
         Returns:
-            Generated facet expressions and explanation
+            Generated FoodEx2 code and explanation
         """
         # Step 1: First try a direct lookup in core_terms collection
         direct_matches = self.search_component_in_core_terms(
@@ -291,16 +288,21 @@ class NovelFoodCodeGenerator:
 
         if exact_match:
             # For exact matches, return directly without further processing
-            # Make sure the code includes proper facet category if it doesn't have one already
+            # If it's a base term code (doesn't start with F), use it directly
             code = exact_match["code"]
-            if not code.startswith("F"):
-                # Assume it's a part (F02) if we don't know better
-                code = f"F02.{code}"
-
-            explanation = f"The food '{food_description}' exactly matches the term '{exact_match['term']}' in our database with code {code}."
-            result = f"""
-FACET EXPRESSIONS: {code}
-EXPLANATION: {explanation}
+            if code.startswith("F"):
+                # If it's a facet, assume we need a generic base term (not ideal but a fallback)
+                result = f"""
+FOODEX2 CODE: A0F5Y#{code}
+EXPLANATION: The food '{food_description}' exactly matches the term '{exact_match['term']}' in our database with facet code {code}. 
+Since this is a facet and not a base term, I've used the generic food product base term (A0F5Y) as a prefix.
+"""
+            else:
+                # It's already a base term
+                result = f"""
+FOODEX2 CODE: {code}
+EXPLANATION: The food '{food_description}' exactly matches the base term '{exact_match['term']}' in our database with code {code}.
+No additional facets are needed as this is an exact match to a base term.
 """
             # Include empty extracted_terms for backward compatibility
             return {
@@ -318,7 +320,7 @@ EXPLANATION: {explanation}
         # Step 3: Search for each component in the core_terms collection ONLY
         component_matches = self.search_all_components(components)
 
-        # Step 4: Generate facet expressions using component matches
+        # Step 4: Generate full FoodEx2 code using component matches (base term + facets)
         result = self.generate_food_code(food_description, component_matches)
 
         # Include empty extracted_terms for backward compatibility

@@ -24,8 +24,7 @@ if not os.path.exists("vector_db"):
 
     # Download zip file from Google Drive
     zip_path = "vector_db.zip"
-    file_id = "1WynqlwWQPSknj3lHPp7GUnPlid-w-dg5"  # Extract ID from the URL
-
+    file_id = "1VPW9dhsNVU-KQibslJp-4D1KeNyXgvUm"  # Extract ID from the URL
     try:
         output = gdown.download(id=file_id, output=zip_path, quiet=False)
 
@@ -557,7 +556,28 @@ with tabs[1]:
 
                     # Display the generated result
                     st.subheader("Generated Facet Expressions")
-                    st.markdown(result["result"], unsafe_allow_html=False)
+
+                    # Display the result as normal text with more prominence
+                    st.markdown("### Result Analysis")
+
+                    # Replace the simple st.write with a formatted markdown display
+                    # that ensures proper line wrapping
+                    st.markdown(
+                        f"""<div style="word-wrap: break-word; 
+                                white-space: pre-wrap; 
+                                word-break: break-word; 
+                                overflow-wrap: break-word; 
+                                background-color: #f0f2f6; 
+                                padding: 15px; 
+                                border-radius: 5px; 
+                                font-family: monospace;">
+                            {result["result"].replace("```", "")}
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    # Add a visual separator to make the result stand out
+                    st.markdown("---")
 
                     # Show detailed results if requested
                     if show_details:
